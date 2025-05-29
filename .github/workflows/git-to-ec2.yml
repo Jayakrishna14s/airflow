@@ -1,0 +1,38 @@
+name: Deploy DAGs to EC2 with rsync
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install rsync
+        run: sudo apt-get update && sudo apt-get install -y rsync
+
+      - name: Create SSH key file
+        run: |
+          echo "${{ secrets.EC2_SSH_KEY }}" > key.pem
+          chmod 600 key.pem
+
+      - name: Ensure target directory exists
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            mkdir -p /home/ec2-user/airflow/dags/
+
+      - name: Sync DAGs to EC2
+        run: |
+          rsync -avz --delete\
+            --rsh="ssh -i key.pem -o StrictHostKeyChecking=no" \
+            ./dags/ \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/airflow/dags/
